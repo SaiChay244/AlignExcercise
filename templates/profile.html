@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../static/profile.css">
+    <title>Profile</title>
+</head>
+<body>
+    <nav>
+        <div class="hello">
+            <img src="../static/icon.svg" alt="">
+            <a href="{{url_for('contests')}}">Contest</a>
+            <a href="{{url_for('practise')}}">Practise</a>
+        </div>
+        <div class="dropdown">
+            <img src="../static/user.svg" alt="User Icon" width="24" height="24">
+            <div class="dropdown-content">
+                <a href="{{url_for('profile')}}">Profile</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </nav>
+    <div class="form-container">
+        <form action="{{url_for('userpersonaldetails')}}" method="post">
+            <label for="weight">Weight</label>
+            <input type="text" id="weight" name="weight" placeholder="Weight">
+            <label for="height">Height</label>
+            <input type="text" id="height" name="height" placeholder="Height">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="Email">
+            <label for="phone">Phone</label>
+            <input type="text" id="phone" name="phone" placeholder="Phone">
+            <input type="submit" value="Submit">
+        </form>
+    </div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contests</title>
+    <link rel="stylesheet" href="../static/contest.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+</head>
+<body>
+    <nav>
+        <div class="hello">
+            <img src="../static/icon.svg" alt="" id = "logo">
+            <a href="{{url_for('practise')}}">Practise</a>
+        </div>
+        <div class="dropdown">
+            <img src="../static/user.svg" alt="User Icon" width="24" height="24">
+            <div class="dropdown-content">
+                <a href="{{url_for('profile')}}">Profile</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </nav>
+    <form id="submitForm">
+        <input type="text" name="user" placeholder="Enter Username">
+        <input type="submit" value="Submit">
+    </form>
+    <script>
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+    
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+    
+        socket.on('send_user_request', function(data) {
+            var contestButton = document.createElement('button');
+            contestButton.textContent = 'Join Contest';
+            console.log('its working....')
+            contestButton.onclick = function() {
+                console.log(data.room)
+                const room = data.room; 
+                window.location.href = '/video_call/' + room; 
+            };
+    
+            document.body.appendChild(contestButton);
+        });
+    
+        document.getElementById('submitForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const username = document.querySelector('input[name="user"]').value; 
+            socket.emit('submit_request', { username: username });
+        });
+
+    </script>
+    
+</body>
+</html>

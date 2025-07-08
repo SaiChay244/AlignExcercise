@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../static/dashboard.css">
+    <style>
+     
+    </style>
+    <title>Dashboard</title>
+</head>
+<body>
+    <nav>
+        <div class="hello">
+            <img src="../static/icon.svg" alt="">
+            <a href="{{Home}}">Home</a>
+        </div>
+        <div class="dropdown">
+            <img src="../static/user.svg" alt="User Icon" width="24" height="24">
+            <div class="dropdown-content">
+                <a href="{{url_for('profile')}}">Profile</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </nav>
+    <div class="motivation">
+        Every step counts towards a healthier you.
+    </div>
+    <div id="main">
+        <a href="{{ url_for('practise') }}">Practise</a>
+        <a href="{{ url_for('contests') }}">Contest</a>
+    </div>
+</body>
+</html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../static/practise.css">
+    <script src="../static/camera.js" crossorigin="anonymous"></script>
+    <script src="../static/control_utils.js" crossorigin="anonymous"></script>
+    <script src="../static/control_utils_3d.js" crossorigin="anonymous"></script>
+    <script src="../static/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="../static/pose.js" crossorigin="anonymous"></script>
+    <title>Exercise Plan</title>
+</head>
+<body>
+    <nav>
+        <div class="hello">
+            <img src="../static/icon.svg" alt="">
+            <a href="{{url_for('contests')}}">Contest</a>
+        </div> 
+        <div class="dropdown">
+            <img src="../static/user.svg" alt="User Icon" width="24" height="24">
+            <div class="dropdown-content"> 
+                <a href="{{url_for('profile')}}">Profile</a>  
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <h1>Welcome, {{ username }}</h1>
+
+    {% if message %}
+        <p>{{ message }}</p>
+    {% else %}
+        <h2>Exercise Plan for Today</h2>
+        <p><strong>Day:</strong> {{ exercise_plan.day }}</p>
+        <div id="container-box">
+            <video class="input_video" style="display: none;"></video>
+            <canvas class="output_canvas" width="1280" height="720"></canvas>
+        </div>
+        <div id="container"> 
+            <p><strong>Pushups:</strong> <span id="pushups_completed">{{ exercise_plan.pushups_completed }}</span> / <span id="pushups">{{ exercise_plan.pushups }}</span></p> <button id="pushups_button">start</button> 
+            <p><strong>Squats:</strong> <span id="squats_completed">{{ exercise_plan.squats_completed }}</span> / <span id="squats">{{ exercise_plan.squats }}</span></p> <button id="squats_button">start</button>
+            <p><strong>Situps:</strong> <span id="situps_completed">{{ exercise_plan.situps_completed }}</span> / <span id="situps">{{ exercise_plan.situps }}</span></p> <button id="situps_button">start</button>
+
+            <p><strong>Completion:</strong> <span id="completion_percentage">{{ exercise_plan.completion }}</span>%</p>
+        </div>
+    {% endif %}
+    
+    <script>
+        const pose = new Pose({locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }});
+        pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          smoothSegmentation: false,
+          minDetectionConfidence: 0.9,
+          minTrackingConfidence: 0.9
+        });
+
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        let pushupCount = parseInt(document.getElementById("pushups_completed").textContent);
+        const pushupTarget = parseInt(document.getElementById("pushups").textContent);
+        let squatCount = parseInt(document.getElementById("squats_completed").textContent);
+        const squatTarget = parseInt(document.getElementById("squats").textContent);
+        let situpCount = parseInt(document.getElementById("situps_completed").textContent);
+        const situpTarget = parseInt(document.getElementById("situps").textContent);
+
+        const completionElement = document.getElementById('completion_percentage');
+
+        
+        let currentExercise = null;
+
+        
+        let stage = "down";  
+
+        const pushupDownThreshold = 90;
+        const pushupUpThreshold = 120;
+        const squatDownThreshold = 100;
+        const squatUpThreshold = 150;
+        const situpDownThreshold = 100;
+        const situpUpThreshold = 70;
+
+        function sendExerciseUpdate(exerciseType, completedReps) {
+            fetch('/update_exercise', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ exercise_type: exerciseType, completed_reps: completedReps })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Exercise update successful');
+                } else {
+                    console.error('Exercise update failed');
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function updateCompletionPercentage() {
+            const totalCompleted = pushupCount + squatCount + situpCount;
+            const totalTarget = pushupTarget + squatTarget + situpTarget;
+            const completionPercentage = Math.round((totalCompleted / totalTarget) * 100);
+            completionElement.textContent = completionPercentage;
+            if (completionPercentage === 100) {
+        fetch('/increment_day', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '/practise';
+            } else {
+                console.error('Failed to increment day');
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+    }
+        }
+
+        function detectExercises(landmarks) {
+            if(currentExercise === 'pushups' && pushupCount < pushupTarget){
+                const angle = calculateBestAngle(
+                    landmarks[11], landmarks[13], landmarks[15], 
+                    landmarks[12], landmarks[14], landmarks[16]  
+                );
+                const toeHandShoulderAngle = calculateBestAngle(
+                    landmarks[15], landmarks[28], landmarks[11], 
+                    landmarks[16], landmarks[27], landmarks[12]  
+                );
+                const toeHandShoulderAngleUpThreshold = 70;
+                const toeHandShoulderAngleDownThreshold = 50;
+                console.log(`${stage} ${angle} ${toeHandShoulderAngle}`);
+
+                if(angle <= pushupDownThreshold && stage === "down" && ((landmarks[11].visibility > 0.9 && landmarks[13].visibility > 0.9 && landmarks[15].visibility > 0.9)
+                || (landmarks[12].visibility > 0.9 && landmarks[14].visibility > 0.9 && landmarks[16].visibility > 0.9)) && toeHandShoulderAngle <= toeHandShoulderAngleDownThreshold){
+                    console.log(`${stage} ${angle}`);
+                    stage = "up";
+                }
+                else if(angle >= pushupUpThreshold && stage === "up"&& ((landmarks[11].visibility > 0.9 && landmarks[13].visibility > 0.9 && landmarks[15].visibility > 0.9)
+                || (landmarks[12].visibility > 0.9 && landmarks[14].visibility > 0.9 && landmarks[16].visibility > 0.9)) && toeHandShoulderAngle >= toeHandShoulderAngleUpThreshold){
+                    console.log(`${stage} ${angle}`);
+                    stage = "down";
+                    pushupCount++;
+                    document.getElementById('pushups_completed').textContent = pushupCount;
+                    sendExerciseUpdate('pushups', pushupCount);
+                    updateCompletionPercentage(); 
+                    const speech = new SpeechSynthesisUtterance("" + pushupCount);
+                    speech.lang = 'en-US';
+                    speech.rate = 1;
+                    speech.volume = 1;
+                    window.speechSynthesis.speak(speech);
+                }
+                if(pushupCount == pushupTarget){
+                    const speech = new SpeechSynthesisUtterance("You have completed today's pushups succesfully");
+                    speech.lang = 'en-US';
+                    speech.rate = 1;
+                    speech.volume = 1;
+                    window.speechSynthesis.speak(speech);
+                }
+            } else if(currentExercise === 'squats' && squatCount < squatTarget){
+
+                const angle = calculateBestAngle(
+                    landmarks[23], landmarks[25], landmarks[27], 
+                    landmarks[24], landmarks[26], landmarks[28]  
+                );
+                const shouldersHipKneeAngle = calculateBestAngle(
+                    landmarks[12], landmarks[24], landmarks[26], 
+                    landmarks[11], landmarks[23], landmarks[25]  
+                );
+                const shouldersHipKneeAngleDownThreshold = 110;
+                const shouldersHipKneeAngleUpThreshold = 150;
+                if(angle <= squatDownThreshold && stage === "down"&& landmarks[23].visibility > 0.9 && ((landmarks[25].visibility > 0.9 && landmarks[27].visibility > 0.9
+                         && landmarks[24].visibility > 0.9) || (landmarks[26].visibility > 0.9 && landmarks[28].visibility > 0.9)) && shouldersHipKneeAngle <= shouldersHipKneeAngleDownThreshold){
+                            console.log(`${stage} ${angle}`);
+                            
+                            stage = "up";
+                }
+                else if(angle >= squatUpThreshold && stage === "up"&& landmarks[23].visibility > 0.9 && ((landmarks[25].visibility > 0.9 && landmarks[27].visibility > 0.9
+                && landmarks[24].visibility > 0.9) || (landmarks[26].visibility > 0.9 && landmarks[28].visibility > 0.9)) && shouldersHipKneeAngle >= shouldersHipKneeAngleUpThreshold){
+                    console.log(`${stage} ${angle}`);
+                    stage = "down";
+                    squatCount++;
+                    document.getElementById('squats_completed').textContent = squatCount;
+                    sendExerciseUpdate('squats', squatCount);
+                    updateCompletionPercentage();
+                    const speech = new SpeechSynthesisUtterance("" + squatCount);
+                    speech.lang = 'en-US';
+                    speech.rate = 1;
+                    speech.volume = 1;
+                    window.speechSynthesis.speak(speech);
+                }
+                if(squatCount == squatTarget){
+                    const speech = new SpeechSynthesisUtterance("You have completed today's squats succesfully");
+                    speech.lang = 'en-US';
+                    speech.rate = 1;
+                    speech.volume = 1;
+                    window.speechSynthesis.speak(speech);
+                }
+            } else if (currentExercise === 'situps' && situpCount < situpTarget) {
+                const angle = calculateBestAngle(
+                    landmarks[11], landmarks[23], landmarks[25],
+                    landmarks[12], landmarks[24], landmarks[26]
+                );
+                console.log(`${stage} ${angle}`);
+                if (angle <= situpUpThreshold && stage === "up" && ((landmarks[11].visibility > 0.9 && landmarks[23].visibility > 0.9 && landmarks[25].visibility > 0.9)
+                         || (landmarks[12].visibility > 0.9 && landmarks[24].visibility > 0.9 && landmarks[26].visibility > 0.9))){
+                            console.log(`${stage} ${angle}`);
+                        stage = "down";
+                } else  if (angle >= situpDownThreshold && stage === "down" && ((landmarks[11].visibility > 0.9 && landmarks[23].visibility > 0.9 && landmarks[25].visibility > 0.9)
+                         || (landmarks[12].visibility > 0.9 && landmarks[24].visibility > 0.9 && landmarks[26].visibility > 0.9))){
+                            console.log(`${stage} ${angle}`);
+                                stage = "up";
+                                ++situpCount;
+                                document.getElementById('situps_completed').textContent = situpCount;
+
+                                sendExerciseUpdate('situps', situpCount);
+                                updateCompletionPercentage();
+                                const speech = new SpeechSynthesisUtterance("" + situpCount);
+                                speech.lang = 'en-US';
+                                speech.rate = 1;
+                                speech.volume = 1;
+                                window.speechSynthesis.speak(speech);
+                }
+                if(situpCount == situpTarget){
+                    const speech = new SpeechSynthesisUtterance("You have completed today's situps succesfully");
+                    speech.lang = 'en-US';
+                    speech.rate = 1;
+                    speech.volume = 1;
+                    window.speechSynthesis.speak(speech);
+                }
+
+            }
+        }
+
+        function calculateBestAngle(a1, b1, c1, a2, b2, c2) {
+          const angle1 = calculateAngle(a1, b1, c1);
+          const angle2 = calculateAngle(a2, b2, c2);
+
+          return (a1.visibility > a2.visibility) ? angle1 : angle2;
+        }
+
+        function calculateAngle(a, b, c) {
+          const ba = { x: a.x - b.x, y: a.y - b.y };
+          const bc = { x: c.x - b.x, y: c.y - b.y };
+
+          const dotProduct = ba.x * bc.x + ba.y * bc.y;
+          const magnitudeBA = Math.sqrt(ba.x * ba.x + ba.y * ba.y);
+          const magnitudeBC = Math.sqrt(bc.x * bc.x + bc.y * bc.y);
+
+          const cosineAngle = dotProduct / (magnitudeBA * magnitudeBC);
+          const angleRadians = Math.acos(cosineAngle); 
+          const angleDegrees = (angleRadians * 180.0) / Math.PI; 
+
+          return angleDegrees;
+        }
+
+        pose.onResults(results => {
+          canvasCtx.save();
+          canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+          canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+          drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+                         {color: '#FFFFFF', lineWidth: 2}); 
+          drawLandmarks(canvasCtx, results.poseLandmarks,
+                        {color: '#FF0000', lineWidth: 1}); 
+          canvasCtx.restore();
+
+          if (results.poseLandmarks) {
+            detectExercises(results.poseLandmarks);
+          }
+        });
+
+        document.getElementById('pushups_button').addEventListener('click', () => {
+          currentExercise = 'pushups';
+          const speech = new SpeechSynthesisUtterance("Counting the reps of pushups");
+            speech.lang = 'en-US';
+            speech.rate = 1;
+            speech.volume = 1;
+            window.speechSynthesis.speak(speech);
+        });
+
+        document.getElementById('squats_button').addEventListener('click', () => {
+          currentExercise = 'squats';
+          const speech = new SpeechSynthesisUtterance("Counting the reps of squats");
+            speech.lang = 'en-US';
+            speech.rate = 1;
+            speech.volume = 1;
+            window.speechSynthesis.speak(speech);
+        });
+
+        document.getElementById('situps_button').addEventListener('click', () => {
+          currentExercise = 'situps';
+          const speech = new SpeechSynthesisUtterance("Counting the reps of situps");
+            speech.lang = 'en-US';
+            speech.rate = 1;
+            speech.volume = 1;
+            window.speechSynthesis.speak(speech);
+        });
+
+        const camera = new Camera(videoElement, {
+          onFrame: async () => {
+            await pose.send({image: videoElement});
+          },
+          width: 1280,
+          height: 720
+        });
+        camera.start();
+    </script>
+</body>
+</html>

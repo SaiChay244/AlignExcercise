@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.13.1/simplepeer.min.js"></script>
+    <style>
+        #video-container {
+            display: flex;
+            justify-content: center;
+        }
+        video {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container"></div>
+
+    <script>
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+        var peer;
+        var myStream;
+        var room = "{{ room }}"; 
+
+        socket.emit('join_call', { username: username, room: room }); // Assume 'username' is available
+
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                myStream = stream;
+                addVideoStream(myStream, 'my-video');
+            })
+            .catch(error => console.error(error));
+
+        socket.on('user_joined', function(data) {
+            // Initiate the WebRTC call
+            peer = new SimplePeer({ initiator: true, trickle: false, stream: myStream });
+
+            peer.on('signal', function(signalData) {
+                socket.emit('offer', { signalData, room: room });
+            });
+
+            socket.on('answer', function(data) {
+               peer.signal(data.signalData);
+            });
+
+            peer.on('stream', function(stream) {
+                addVideoStream(stream, 'remote-video');
+            });
+        });
+
+        socket.on('offer', function(data) {
+            peer = new SimplePeer({ initiator: false, trickle: false, stream: myStream });
+            peer.on('signal', function(signalData) {
+                socket.emit('answer', { signalData, room: room });
+            });
+            peer.signal(data.signalData);
+            peer.on('stream', function(stream) {
+                addVideoStream(stream, 'remote-video');
+            });
+        });
+
+        socket.on('ice_candidate', (data) => {
+            peer.addIceCandidate(data.candidate); 
+        });
+
+        function addVideoStream(stream, videoId) {
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.id = videoId;
+            video.autoplay = true;
+            video.playsinline = true;
+            document.getElementById('video-container').appendChild(video);
+        }
+    </script>
+</body>
+</html>
